@@ -386,7 +386,7 @@ def main():
         print(f"Portal completo gravado em {pd}")
 
     # 2) painel de administração (artifact do claude.ai): sem os PDFs, só índice e configuração
-    vault = {**vbase, "pdfs": False, "portal": a.portal_url}
+    vault = {**vbase, "pdfs": False, "portal": a.portal_url, "auto": password}  # painel privado: abre direto, sem senha
     json.dump(vault, open(os.path.join(a.out, "vault.json"), "w"))
     shutil.copy(a.template, os.path.join(a.out, "index.html"))
     os.makedirs(os.path.join(a.out, "src"))

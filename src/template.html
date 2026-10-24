@@ -279,7 +279,12 @@ mark{background:var(--mark);color:var(--mark-ink);border-radius:2px;padding:0 1p
 .odoc select{border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);min-width:0;width:100%}
 .odoc .ic{display:flex;align-items:center;gap:4px;font-family:var(--f-mono);font-size:11px;color:var(--accent);white-space:nowrap}
 .odoc .file{grid-column:1/-1;font-family:var(--f-mono);font-size:11px;color:var(--faint);margin-top:-2px}
+[hidden]{display:none!important}
 .oempty{font-size:13px;color:var(--faint);padding:8px 0 0}
+body.admin .org{left:0;bottom:0}
+.org .ofilter{width:240px;max-width:100%;padding:7px 10px;font-size:14px}
+.org header .hd{flex:1;min-width:240px;display:flex;flex-direction:column;gap:2px}
+.org .portal-link{color:var(--accent);font-weight:600;font-size:13px}
 @media (max-width:760px){ .org{left:0;bottom:56px} .odoc{grid-template-columns:minmax(0,1fr)} .org .obody,.org header{padding-left:16px;padding-right:16px} }
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:4px;z-index:95;font-size:14px;max-width:calc(100% - 32px)}
 
@@ -1019,7 +1024,7 @@ $("#syncPop").addEventListener("submit", async e => {
 });
 
 /* Editor de organização */
-let ORG = null, ORGDOC = null;
+let ORG = null, ORGDOC = null, ORGFILTER = "";
 const cloneNode = n => ({id:n.id, titulo:n.titulo, descricao:n.descricao||"", icone:n.icone||"", docs:[...n.docs], filhos:n.filhos.map(cloneNode)});
 function orgAll(nodes, path=[]){ const out=[]; for (const n of nodes){ const p=[...path, n.titulo||"Sem título"]; out.push({n, label:p.join(" › ")}); out.push(...orgAll(n.filhos, p)); } return out; }
 function orgFind(id, nodes=ORG, parent=null){ for (const n of nodes){ if (n.id===id) return {n, list:nodes, parent}; const r = orgFind(id, n.filhos, n); if (r) return r; } return null; }
@@ -1051,7 +1056,15 @@ function renderOrg(){
       ${!ds.length && !n.filhos.length ? `<div class="oempty">Pasta vazia. Mova catálogos para cá pelo seletor de pasta de cada catálogo.</div>` : ""}
       ${n.filhos.map(c => nodeHtml(c, depth+1)).join("")}</div>`;
   };
-  el.innerHTML = `<header><h2>Organizar catálogos</h2><p>Os catálogos ficam sempre em ordem numérica e alfabética dentro de cada pasta. Ao salvar, as mudanças são publicadas pela sincronização em 5 a 10 minutos.</p>
+  const ADM = document.body.classList.contains("admin");
+  const dt = new Date(String(INDEX.gerado||"").replace(/([+-]\d\d)(\d\d)$/,"$1:$2"));
+  const quando = isNaN(dt) ? "" : dt.toLocaleString("pt-BR",{dateStyle:"short",timeStyle:"short"});
+  const head = ADM ? `<header><div class="hd"><h2>Organizador do portal</h2>
+      <p>${DOCS.length} catálogos${quando?` · portal atualizado em ${quando}`:""}. Renomeie, mova, crie pastas e subpastas. <b>Sincronizar</b> lê o Google Drive, aplica esta organização e atualiza o portal em 5 a 10 minutos.${VAULT.portal?` <a class="portal-link" href="${esc(VAULT.portal)}" target="_blank" rel="noopener">Abrir o portal ↗</a>`:""}</p></div>
+      <input class="field ofilter" id="orgFilter" type="search" placeholder="Filtrar catálogos" value="${esc(ORGFILTER)}" aria-label="Filtrar catálogos">
+      <span class="msg" id="orgMsg" style="font-size:13px"></span>
+      <button class="btn" type="button" id="orgCancel">Desfazer alterações</button><button class="btn primary" type="button" id="orgSave">Sincronizar</button></header>` : "";
+  el.innerHTML = head ? head + `<div class="obody">${ORG.map(n => nodeHtml(n,0)).join("")}<button class="btn" type="button" id="orgNew">${ico("plus")}Nova seção</button></div>` : `<header><h2>Organizar catálogos</h2><p>Os catálogos ficam sempre em ordem numérica e alfabética dentro de cada pasta. Ao salvar, as mudanças são publicadas pela sincronização em 5 a 10 minutos.</p>
       <span class="msg" id="orgMsg" style="font-size:13px"></span>
       <button class="btn" type="button" id="orgCancel">Cancelar</button><button class="btn primary" type="button" id="orgSave">Salvar e publicar</button></header>
     <div class="obody">${ORG.map(n => nodeHtml(n,0)).join("")}<button class="btn" type="button" id="orgNew">${ico("plus")}Nova seção</button></div>`;
@@ -1079,7 +1092,10 @@ function renderOrg(){
     });
   });
   $("#orgNew").addEventListener("click", () => { ORG.push({id:"s"+Date.now().toString(36), titulo:"Nova seção", descricao:"", icone:"", docs:[], filhos:[]}); renderOrg(); el.querySelector(".obody").scrollTop = 1e9; });
-  $("#orgCancel").addEventListener("click", () => { el.hidden = true; });
+  $("#orgCancel").addEventListener("click", () => { if (ADM){ ORGFILTER = ""; openOrg(); } else el.hidden = true; });
+  const fl = $("#orgFilter");
+  if (fl){ const apply = () => { const q = ORGFILTER.trim().toLowerCase(); el.querySelectorAll(".odoc").forEach(r => { const d = ORGDOC[r.dataset.doc], f = BYID[r.dataset.doc]; r.hidden = !!q && !`${d.nome} ${d.titulo} ${f?.arquivo||""}`.toLowerCase().includes(q); }); };
+    fl.addEventListener("input", () => { ORGFILTER = fl.value; apply(); }); apply(); }
   $("#orgSave").addEventListener("click", saveOrg);
 }
 const nk = s => { const m = String(s).trim().match(/^(\d+)/); return m ? "0" + m[1].padStart(8,"0") + s.toLowerCase() : "1" + String(s).toLowerCase(); };
@@ -1092,7 +1108,7 @@ async function saveOrg(){
   btn.disabled = true; msg.style.color = "var(--muted)"; msg.textContent = "Enviando…";
   try {
     await fireSync("ORGANIZAR\n" + JSON.stringify(payload));
-    msg.style.color = "var(--ink)"; msg.textContent = "Enviado. A nova organização aparece em 5 a 10 minutos; depois, recarregue o portal.";
+    msg.style.color = "var(--ink)"; msg.textContent = document.body.classList.contains("admin") ? "Sincronização iniciada. Em 5 a 10 minutos o portal estará atualizado; depois, recarregue esta página." : "Enviado. A nova organização aparece em 5 a 10 minutos; depois, recarregue o portal.";
     btn.textContent = "Enviado";
   } catch(err){ console.error(err); msg.style.color = "var(--accent)"; msg.textContent = mcpErr(err); btn.disabled = false; }
 }
@@ -1106,6 +1122,15 @@ function start(){
 }
 (async () => {
   if (window.claude && window.claude.use){ window.claude.use("downloads").then(x => { DL = x; }).catch(()=>{}); }
+  // painel de administração (link privado do claude.ai): abre direto no organizador
+  try {
+    const r = await fetch("vault.json"); if (r.ok){ VAULT = await r.json(); }
+    if (VAULT && VAULT.pdfs === false && VAULT.auto){
+      $("#lock").hidden = true;
+      if (await unlock(VAULT.auto)){ prep(); document.body.classList.add("admin"); $("#app").hidden = true; openOrg(); return; }
+      $("#lock").hidden = false;
+    }
+  } catch(e){ console.error(e); $("#lock").hidden = false; }
   const saved = store.get("ccc-pw");
   if (saved){ $("#remember").checked = true; try { if (await unlock(saved)){ start(); return; } } catch(e){} store.del("ccc-pw"); }
   $("#pw").focus();
