@@ -330,6 +330,17 @@ def main():
         n["filhos"] = [c for c in (resolve(ch) for ch in node.get("filhos", []))]
         n["total"] = len(n["docs"]) + sum(c["total"] for c in n["filhos"])
         return n
+    # regra fixa: arquivo com "(Fora de linha)" ou "old" no nome vai para o grupo Fora de linha
+    fora = next((m for m in cat.get("mapa", []) if m.get("id") == "fora"), None)
+    if fora is not None:
+        for d in docs:
+            if re.search(r"fora de linha|\bold\b", d["arquivo"], re.I):
+                for m in cat["mapa"]:
+                    def rm(n):
+                        n["docs"] = [x for x in n.get("docs", []) if x != d["drive"]]
+                        for c in n.get("filhos", []): rm(c)
+                    rm(m)
+                fora.setdefault("docs", []).append(d["drive"])
     mapa = [resolve(x) for x in cat.get("mapa", [])]
     soltos = sorted([d for d in docs if d["id"] not in placed], key=lambda d: nkey(d["nome"]))
     if soltos:
